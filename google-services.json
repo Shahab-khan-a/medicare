@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1035419509044",
+    "firebase_url": "https://medicare-fbd7a-default-rtdb.firebaseio.com",
+    "project_id": "medicare-fbd7a",
+    "storage_bucket": "medicare-fbd7a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1035419509044:android:e6c36a63a062a0e4a90561",
+        "android_client_info": {
+          "package_name": "com.techflow.medicare"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1035419509044-qramu66dpds423vd39itbsbi0fa0qgtn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9olX-ZtJVfA5CGNVymyNu4zLGHwdm9Zk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1035419509044-qramu66dpds423vd39itbsbi0fa0qgtn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
