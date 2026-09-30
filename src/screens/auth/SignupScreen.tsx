@@ -93,7 +93,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
           [
             {
               text: 'View Verification Status',
-              onPress: () => navigation.replace('DoctorVerification'),
+              onPress: () => navigation.navigate('DoctorVerification', { fromLogin: true }),
             },
             {
               text: 'Continue to Portal',
@@ -121,7 +121,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
             text: 'Continue as Demo',
             onPress: () => {
               if (role === 'doctor') {
-                navigation.replace('DoctorTabs');
+                navigation.navigate('DoctorVerification', { fromLogin: true });
               } else {
                 navigation.replace('PatientTabs');
               }

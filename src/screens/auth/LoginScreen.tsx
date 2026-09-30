@@ -49,7 +49,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       setLoading(false);
 
       if (userRole === 'doctor' || profile.role === 'doctor') {
-        navigation.replace('DoctorTabs');
+        navigation.navigate('DoctorVerification', { fromLogin: true });
       } else {
         navigation.replace('PatientTabs');
       }
@@ -71,7 +71,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         setCurrentUser(profile);
         setLoading(false);
         if (userRole === 'doctor' || profile.role === 'doctor') {
-          navigation.replace('DoctorTabs');
+          navigation.navigate('DoctorVerification', { fromLogin: true });
         } else {
           navigation.replace('PatientTabs');
         }
@@ -146,14 +146,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       setCurrentUser(profile);
       setLoading(false);
       if (role === 'doctor') {
-        navigation.replace('DoctorTabs');
+        navigation.navigate('DoctorVerification', { fromLogin: true });
       } else {
         navigation.replace('PatientTabs');
       }
     } catch (err) {
       setLoading(false);
       if (role === 'doctor') {
-        navigation.replace('DoctorTabs');
+        navigation.navigate('DoctorVerification', { fromLogin: true });
       } else {
         navigation.replace('PatientTabs');
       }
@@ -171,7 +171,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       setCurrentUser(profile);
       setLoading(false);
       if (userRole === 'doctor' || profile.role === 'doctor') {
-        navigation.replace('DoctorTabs');
+        navigation.navigate('DoctorVerification', { fromLogin: true });
       } else {
         navigation.replace('PatientTabs');
       }

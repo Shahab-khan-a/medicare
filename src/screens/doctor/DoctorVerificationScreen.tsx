@@ -18,6 +18,7 @@ import { useApp } from '../../context/AppContext';
 
 interface DoctorVerificationScreenProps {
   navigation: any;
+  route?: any;
 }
 
 const SPECIALTY_OPTIONS = [
@@ -33,7 +34,9 @@ const SPECIALTY_OPTIONS = [
 
 export const DoctorVerificationScreen: React.FC<DoctorVerificationScreenProps> = ({
   navigation,
+  route,
 }) => {
+  const fromLogin = route?.params?.fromLogin;
   const {
     currentUser,
     isCurrentDoctorVerified,
@@ -90,7 +93,17 @@ export const DoctorVerificationScreen: React.FC<DoctorVerificationScreenProps> =
       setIsEditing(false);
       Alert.alert(
         'Credentials Submitted',
-        'Your medical credentials have been submitted for verification. The credentialing board will review your license.'
+        'Your medical credentials have been submitted for verification. The credentialing board will review your license.',
+        [
+          {
+            text: 'Go to Dashboard',
+            onPress: () => navigation.replace('DoctorTabs'),
+          },
+          {
+            text: 'View Status',
+            style: 'cancel',
+          },
+        ]
       );
     } else {
       Alert.alert('Error', 'Could not submit verification at this moment.');
@@ -110,7 +123,17 @@ export const DoctorVerificationScreen: React.FC<DoctorVerificationScreenProps> =
             setIsEditing(false);
             Alert.alert(
               'Account Verified!',
-              'This physician account is now verified. Live consultations and verified patient trust badges are unlocked.'
+              'This physician account is now verified. Live consultations and verified patient trust badges are unlocked.',
+              [
+                {
+                  text: 'Go to Doctor Dashboard',
+                  onPress: () => navigation.replace('DoctorTabs'),
+                },
+                {
+                  text: 'Stay Here',
+                  style: 'cancel',
+                },
+              ]
             );
           },
         },
@@ -142,13 +165,44 @@ export const DoctorVerificationScreen: React.FC<DoctorVerificationScreenProps> =
       <Header
         title="Doctor Verification"
         showBack
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.replace('DoctorTabs');
+          }
+        }}
+        rightComponent={
+          <TouchableOpacity
+            onPress={() => navigation.replace('DoctorTabs')}
+            style={styles.portalNavButton}
+            accessibilityLabel="Proceed to doctor dashboard"
+          >
+            <Text style={styles.portalNavButtonText}>Dashboard</Text>
+            <Icon name="arrow-forward" size={14} color={colors.primary} />
+          </TouchableOpacity>
+        }
       />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {fromLogin && (
+          <View style={styles.loginWelcomeBanner}>
+            <View style={styles.loginWelcomeIcon}>
+              <Icon name="medkit" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.loginWelcomeTitle}>
+                Welcome, {currentUser?.name || 'Doctor'}!
+              </Text>
+              <Text style={styles.loginWelcomeSubtitle}>
+                Please review your medical credential status below before entering OPD practice.
+              </Text>
+            </View>
+          </View>
+        )}
         {/* Verification Status Card */}
         <View
           style={[
@@ -321,7 +375,7 @@ export const DoctorVerificationScreen: React.FC<DoctorVerificationScreenProps> =
             <View style={{ marginTop: 18 }}>
               <Button
                 title="Go to Doctor Dashboard"
-                onPress={() => navigation.navigate('DoctorTabs')}
+                onPress={() => navigation.replace('DoctorTabs')}
               />
               <TouchableOpacity
                 onPress={handleRevoke}
@@ -384,7 +438,7 @@ export const DoctorVerificationScreen: React.FC<DoctorVerificationScreenProps> =
               <Icon name="checkmark-circle" size={18} color={colors.success} />
             </View>
 
-            {/* If pending, show Demo Instant Approval button */}
+            {/* If pending, show Demo Instant Approval button and Continue button */}
             {isPending && (
               <View style={{ marginTop: 20 }}>
                 <Button
@@ -395,6 +449,13 @@ export const DoctorVerificationScreen: React.FC<DoctorVerificationScreenProps> =
                 <Text style={styles.demoHintText}>
                   Tap to instantly approve and test full doctor privileges without waiting for board review.
                 </Text>
+                <View style={{ marginTop: 12 }}>
+                  <Button
+                    title="Continue to Doctor Dashboard"
+                    onPress={() => navigation.replace('DoctorTabs')}
+                    variant="outline"
+                  />
+                </View>
               </View>
             )}
           </View>
@@ -505,10 +566,18 @@ export const DoctorVerificationScreen: React.FC<DoctorVerificationScreenProps> =
                 onPress={handleSubmit}
                 loading={submitting}
               />
+              <TouchableOpacity
+                onPress={() => navigation.replace('DoctorTabs')}
+                style={{ marginTop: 14, alignItems: 'center', paddingVertical: 8 }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 13, textDecorationLine: 'underline' }}>
+                  Skip to Doctor Dashboard for Now →
+                </Text>
+              </TouchableOpacity>
               {(isPending || isVerified) && (
                 <TouchableOpacity
                   onPress={() => setIsEditing(false)}
-                  style={{ marginTop: 12, alignItems: 'center', paddingVertical: 8 }}
+                  style={{ marginTop: 8, alignItems: 'center', paddingVertical: 8 }}
                 >
                   <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Cancel</Text>
                 </TouchableOpacity>
@@ -819,5 +888,51 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  loginWelcomeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 12,
+  },
+  loginWelcomeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loginWelcomeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  loginWelcomeSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  portalNavButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: borderRadius.round,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    gap: 4,
+  },
+  portalNavButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });
