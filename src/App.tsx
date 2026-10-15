@@ -9,8 +9,7 @@ import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationIndependentTree } from '@react-navigation/native';
-import RootNavigator from './navigation/RootNavigator';
+import { Stack } from 'expo-router';
 import { AppProvider } from './context/AppContext';
 import { colors } from './theme';
 
@@ -42,9 +41,7 @@ export const App: React.FC = () => {
     <SafeAreaProvider style={{ backgroundColor: colors.background }}>
       <StatusBar style="dark" />
       <AppProvider>
-        <NavigationIndependentTree>
-          <RootNavigator />
-        </NavigationIndependentTree>
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: colors.background } }} />
       </AppProvider>
     </SafeAreaProvider>
   );

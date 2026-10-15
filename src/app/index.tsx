@@ -1,6 +1,6 @@
 import React from 'react';
-import App from '../App';
+import { Href, Redirect } from 'expo-router';
 
 export default function Index() {
-  return <App />;
+  return <Redirect href={'/auth/Splash' as Href} />;
 }

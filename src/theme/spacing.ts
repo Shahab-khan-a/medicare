@@ -51,5 +51,5 @@ export const shadows = {
   card: shadow('#0F172A', 4, 0.06, 12, 2),
   medium: shadow('#0F172A', 6, 0.08, 16, 4),
   large: shadow('#0F172A', 12, 0.12, 24, 8),
-  primary: shadow('#136BC6', 6, 0.28, 12, 4),
+  primary: shadow('#267259', 4, 0.14, 10, 3),
 };

@@ -1,7 +1,7 @@
-export * from './DoctorDashboardScreen';
-export * from './DoctorAppointmentsScreen';
-export * from './DoctorAvailabilityScreen';
+export { default as DoctorDashboardScreen } from './DoctorDashboardScreen';
+export { default as DoctorAppointmentsScreen } from './DoctorAppointmentsScreen';
+export { default as DoctorAvailabilityScreen } from './DoctorAvailabilityScreen';
 export * from './DoctorVideoCallScreen';
-export * from './WritePrescriptionScreen';
-export * from './DoctorEarningsScreen';
-export * from './DoctorProfileScreen';
+export { default as WritePrescriptionScreen } from './WritePrescriptionScreen';
+export { default as DoctorEarningsScreen } from './DoctorEarningsScreen';
+export { default as DoctorProfileScreen } from './DoctorProfileScreen';

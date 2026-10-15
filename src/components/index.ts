@@ -17,3 +17,4 @@ export * from './BottomSheet';
 export * from './LiveTokenCard';
 export * from './AppointmentStatusBadge';
 export * from './QRCodeModal';
+export * from './HospitalCard';

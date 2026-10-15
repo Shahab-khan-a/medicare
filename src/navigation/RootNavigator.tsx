@@ -20,6 +20,7 @@ import VideoCallScreen from '../screens/patient/VideoCallScreen';
 import PrescriptionScreen from '../screens/patient/PrescriptionScreen';
 import NotificationsScreen from '../screens/patient/NotificationsScreen';
 import LiveQueueTrackerScreen from '../screens/patient/LiveQueueTrackerScreen';
+import HospitalDetailScreen from '../screens/patient/HospitalDetailScreen';
 
 // Doctor Screens
 import DoctorAvailabilityScreen from '../screens/doctor/DoctorAvailabilityScreen';
@@ -76,6 +77,7 @@ export const RootNavigator: React.FC = () => {
         <Stack.Screen name="Prescription" component={PrescriptionScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="LiveQueueTracker" component={LiveQueueTrackerScreen} />
+        <Stack.Screen name="HospitalDetail" component={HospitalDetailScreen} />
 
         {/* Doctor Tabs & Stack Screens */}
         <Stack.Screen name="DoctorTabs" component={DoctorTabs} />

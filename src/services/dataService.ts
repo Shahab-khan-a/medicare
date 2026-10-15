@@ -72,6 +72,24 @@ export const getDoctors = async (): Promise<Doctor[]> => {
     }
 
     if (cachedDoctors.length > 0) {
+      const hasMissingCityOrCount =
+        cachedDoctors.some((d) => !d.city) ||
+        cachedDoctors.length < defaultDoctorCatalog.length;
+      if (hasMissingCityOrCount) {
+        const mergedMap = new Map<string, Doctor>();
+        defaultDoctorCatalog.forEach((d) => mergedMap.set(d.id, d));
+        cachedDoctors.forEach((d) => {
+          const fallback = defaultDoctorCatalog.find((cat) => cat.id === d.id);
+          mergedMap.set(d.id, {
+            ...d,
+            city: d.city || fallback?.city || 'Lahore',
+            hospital: d.hospital || fallback?.hospital || 'MediCare Hospital',
+          });
+        });
+        const updatedList = Array.from(mergedMap.values());
+        await AsyncStorage.setItem(STORAGE_KEYS.DOCTORS, JSON.stringify(updatedList));
+        return updatedList;
+      }
       return cachedDoctors;
     }
     return defaultDoctorCatalog;

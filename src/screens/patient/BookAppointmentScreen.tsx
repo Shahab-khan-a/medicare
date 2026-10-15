@@ -1,909 +1,139 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  StatusBar,
-  Alert,
-} from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, BackHandler } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
-import Icon from '../../components/Icon';
-import Header from '../../components/Header';
-import Button from '../../components/Button';
-import InputField from '../../components/InputField';
-import TimeSlotChip from '../../components/TimeSlotChip';
-import { ConsultationType, Doctor, FamilyMember } from '../../types';
+import { colors, typography } from '../../theme';
+import { Icon } from '../../components/Icon';
+import { Header } from '../../components/Header';
+import { Button } from '../../components/Button';
+import { InputField } from '../../components/InputField';
+import { FormScrollView } from '../../components/FormScrollView';
+import { EmptyState } from '../../components/EmptyState';
+import { Doctor, FamilyMember } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { bookingDates, patientErrors, SERVICE_FEE, VISIT_SHIFTS, visitDateTime } from '../../utils/booking';
 
-interface BookAppointmentScreenProps {
-  navigation: any;
-  route: any;
-}
-
-const getBookingDates = () => {
-  const list = [];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const now = new Date();
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(now);
-    d.setDate(now.getDate() + i);
-    list.push({
-      day: dayNames[d.getDay()],
-      date: String(d.getDate()).padStart(2, '0'),
-      full: `${d.getDate()} ${monthNames[d.getMonth()]}, ${d.getFullYear()}`,
-    });
-  }
-  return list;
-};
-
-const morningSlots = ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM'];
-const eveningSlots = ['02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '05:00 PM'];
-
-export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
-  navigation,
-  route,
-}) => {
-  const { familyMembers, addFamilyMember, queueStatus, doctors, currentUser } = useApp();
-  const datesList = getBookingDates();
-  const doctor: Doctor = route?.params?.doctor || doctors[0];
-
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [selectedDate, setSelectedDate] = useState(datesList[0]?.full || 'Today');
-  const [selectedTime, setSelectedTime] = useState('10:00 AM');
-  const [consultationType] = useState<ConsultationType>('in_clinic');
-  const [selectedShift, setSelectedShift] = useState<'Morning OPD' | 'Evening OPD'>('Morning OPD');
-
-  // Selected Family Member
-  const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(familyMembers[0] || null);
-
-  // Patient Details
-  const [patientName, setPatientName] = useState(
-    familyMembers[0]?.name || currentUser?.name || ''
-  );
-  const [patientAge, setPatientAge] = useState(
-    familyMembers[0]?.age ? String(familyMembers[0].age) : '28'
-  );
-  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>(
-    (familyMembers[0]?.gender as any) || 'Male'
-  );
+export default function BookAppointmentScreen({ navigation, route }: { navigation: any; route: any }) {
+  const { doctors, currentUser, familyMembers } = useApp();
+  const doctor: Doctor | undefined = route?.params?.doctor || doctors.find(d => d.id === route?.params?.doctorId);
+  const dates = useMemo(() => doctor ? bookingDates(doctor) : [], [doctor]);
+  const [step, setStep] = useState(0);
+  const [date, setDate] = useState(dates.find(d => d.available)?.full || '');
+  const [shift, setShift] = useState<0 | 1>(0);
+  const [time, setTime] = useState('');
+  const [memberId, setMemberId] = useState<string | undefined>(familyMembers[0]?.id);
+  const [name, setName] = useState(familyMembers[0]?.name || currentUser?.name || '');
+  const [age, setAge] = useState(familyMembers[0] ? String(familyMembers[0].age) : '');
+  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>(familyMembers[0]?.gender || 'Other');
   const [symptoms, setSymptoms] = useState('');
-  const [hasReportUploaded, setHasReportUploaded] = useState(false);
-
-  const handleSelectMember = (member: FamilyMember) => {
-    setSelectedMember(member);
-    setPatientName(member.name);
-    setPatientAge(String(member.age));
-    setGender(member.gender);
+  const [validation, setValidation] = useState(false);
+  const [visitError, setVisitError] = useState('');
+  const scroll = useRef<ScrollView>(null);
+  useFocusEffect(useCallback(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step === 0) return false;
+      setStep(value => value - 1);
+      scroll.current?.scrollTo({ y: 0, animated: false });
+      return true;
+    });
+    return () => subscription.remove();
+  }, [step]));
+  const errors = patientErrors(name, age);
+  const changeStep = (value: number) => { setStep(value); scroll.current?.scrollTo({ y: 0, animated: false }); };
+  const selectMember = (member?: FamilyMember) => {
+    setMemberId(member?.id); setName(member?.name || ''); setAge(member ? String(member.age) : '');
+    setGender(member?.gender || 'Other'); setValidation(false);
   };
-
-  const handleQuickAddMember = () => {
-    if (Alert.prompt) {
-      Alert.prompt('Add Family Member', 'Enter member name (e.g. Sister - Sara):', (text) => {
-        if (text) {
-          const newMem = addFamilyMember({
-            name: text,
-            relationship: 'Sister',
-            age: 24,
-            gender: 'Female',
-          });
-          handleSelectMember(newMem);
-        }
-      });
-    } else {
-      const newMem = addFamilyMember({
-        name: 'Sara Khan',
-        relationship: 'Sister',
-        age: 24,
-        gender: 'Female',
-      });
-      handleSelectMember(newMem);
-      Alert.alert('Family Member Added', 'Added Sister (Sara Khan) to your family profiles.');
+  const validVisit = () => {
+    if (!date || !time || !(visitDateTime(date, time) > new Date())) {
+      setVisitError('Choose a date and a future visit time.'); changeStep(0); return false;
     }
+    return true;
   };
-
-  const handleContinue = () => {
-    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      // Proceed to payment
-      const nextTokenNum = (queueStatus.totalTokensToday || 20) + 1;
-      navigation.navigate('Payment', {
-        doctor,
-        bookingDetails: {
-          date: selectedDate,
-          time: selectedTime,
-          type: consultationType,
-          patientName,
-          patientAge: Number(patientAge) || 29,
-          gender,
-          familyMemberId: selectedMember?.id,
-          familyMemberRelation: selectedMember?.relationship,
-          symptoms,
-          fees: doctor.fees,
-          tokenNumber: selectedShift === 'Morning OPD' ? nextTokenNum : 42,
-          currentServingNumber: queueStatus.currentServing,
-          shift: selectedShift,
-          opdRoom: 'Room #204',
-          hasReportUploaded,
-        },
-      });
-    }
+  const continueBooking = () => {
+    if (!doctor || !validVisit()) return;
+    if (step === 0) { changeStep(1); return; }
+    setValidation(true);
+    if (errors.name || errors.age) { changeStep(1); return; }
+    if (step === 1) { changeStep(2); return; }
+    const member = familyMembers.find(m => m.id === memberId);
+    navigation.navigate('Payment', { doctor, bookingDetails: {
+      date, time, type: 'in_clinic', patientName: name.trim(), patientAge: Number(age), gender,
+      familyMemberId: member?.id, familyMemberRelation: member?.relationship,
+      symptoms: symptoms.trim(), fees: doctor.fees, shift: VISIT_SHIFTS[shift].name,
+      opdRoom: doctor.roomNumber || 'Ask at clinic reception',
+    } });
   };
-
+  if (!doctor) return <SafeAreaView style={styles.screen}><Header title="Book a visit" showBack onBack={() => navigation.goBack()} /><EmptyState icon="search-outline" title="Choose your doctor first" subtitle="Find a doctor to see their clinic and consultation fee." actionTitle="Find a doctor" onAction={() => navigation.navigate('DoctorList')} /></SafeAreaView>;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-
-      <Header
-        title="Book Appointment"
-        showBack
-        onBack={() => {
-          if (currentStep > 1) {
-            setCurrentStep(currentStep - 1);
-          } else {
-            navigation.goBack();
-          }
-        }}
-      />
-
-      {/* Top Doctor Summary Card */}
-      <View style={styles.summaryCard}>
-        <Image source={{ uri: doctor.photo }} style={styles.doctorThumb} />
-        <View style={styles.summaryInfo}>
-          <Text numberOfLines={1} style={styles.summaryDoctorName}>
-            {doctor.name}
-          </Text>
-          <Text style={styles.summaryDoctorSpecialty}>{doctor.specialty}</Text>
-          <View style={styles.summaryMetaRow}>
-            <Icon name="calendar-outline" size={13} color={colors.primary} />
-            <Text style={styles.summaryMetaText}>{selectedDate}</Text>
-            <View style={styles.dot} />
-            <Icon name="time-outline" size={13} color={colors.primary} />
-            <Text style={styles.summaryMetaText}>{selectedTime}</Text>
-          </View>
-        </View>
-        <View style={styles.feeBadge}>
-          <Text style={styles.feeAmount}>Rs. {doctor.fees}</Text>
-        </View>
+    <SafeAreaView style={styles.screen}>
+      <StatusBar barStyle="dark-content" />
+      <Header title="Book your visit" showBack onBack={() => step > 0 ? changeStep(step - 1) : navigation.goBack()} />
+      <View style={styles.progress}>
+        {['Visit', 'Patient', 'Review'].map((label, index) => <View key={label} style={styles.progressItem}><View style={[styles.progressLine, index <= step && styles.progressActive]} /><Text style={[styles.progressLabel, index === step && { color: colors.primary }]}>{index + 1}. {label}</Text></View>)}
       </View>
-
-      {/* 4 Step Indicator */}
-      <View style={styles.stepIndicator}>
-        {[1, 2, 3, 4].map((step) => (
-          <React.Fragment key={step}>
-            <TouchableOpacity
-              onPress={() => setCurrentStep(step)}
-              style={[
-                styles.stepCircle,
-                currentStep >= step && styles.stepCircleActive,
-                currentStep === step && styles.stepCircleCurrent,
-              ]}
-            >
-              {currentStep > step ? (
-                <Icon name="checkmark" size={14} color={colors.white} />
-              ) : (
-                <Text
-                  style={[
-                    styles.stepNumber,
-                    currentStep >= step && styles.stepNumberActive,
-                  ]}
-                >
-                  {step}
-                </Text>
-              )}
-            </TouchableOpacity>
-            {step < 4 && (
-              <View
-                style={[
-                  styles.stepLine,
-                  currentStep > step && styles.stepLineActive,
-                ]}
-              />
-            )}
-          </React.Fragment>
-        ))}
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Step 1: Select Date */}
-        {currentStep === 1 && (
-          <View style={styles.stepSection}>
-            <Text style={styles.stepTitle}>Step 1: Select Date</Text>
-            <Text style={styles.stepSubtitle}>Choose your preferred consultation date</Text>
-
-            <View style={styles.datesGrid}>
-              {datesList.map((item, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  activeOpacity={0.8}
-                  onPress={() => setSelectedDate(item.full)}
-                  style={[
-                    styles.dateSelectCard,
-                    selectedDate === item.full && styles.dateSelectCardActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.dateDayText,
-                      selectedDate === item.full && styles.dateDayTextActive,
-                    ]}
-                  >
-                    {item.day}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.dateNumText,
-                      selectedDate === item.full && styles.dateNumTextActive,
-                    ]}
-                  >
-                    {item.date}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+      <FormScrollView ref={scroll} contentContainerStyle={styles.content}>
+        <View style={styles.doctorCard}><Image source={{ uri: doctor.photo }} style={styles.photo} /><View style={{ flex: 1 }}><Text style={styles.doctorName}>{doctor.name}</Text><Text style={styles.body}>{doctor.specialty}</Text><Text style={styles.body}>{doctor.hospital}</Text></View></View>
+        <Text style={styles.title}>{['When would you like to visit?', 'Who is this visit for?', 'Everything look right?'][step]}</Text>
+        <Text style={styles.description}>{['Choose a date and time for your in-person clinic visit.', 'Check the patient details so the clinic can prepare.', 'Check your visit and total fee before continuing.'][step]}</Text>
+        {step === 0 && <>
+          <Text style={styles.label}>Choose a date</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateRow}>
+            {dates.map(item => <TouchableOpacity key={item.full} disabled={!item.available} accessibilityRole="button" accessibilityLabel={item.full} accessibilityState={{ selected: date === item.full, disabled: !item.available }} onPress={() => { setDate(item.full); setTime(''); setVisitError(''); }} style={[styles.date, date === item.full && styles.selected, !item.available && styles.disabled]}>
+              <Text style={[styles.dateDay, date === item.full && styles.white]}>{item.day}</Text><Text style={[styles.dateNumber, date === item.full && styles.white]}>{item.number}</Text><Text style={[styles.dateDay, date === item.full && styles.white]}>{item.month}</Text>
+            </TouchableOpacity>)}
+          </ScrollView>
+          <Text style={styles.label}>Choose a clinic shift</Text>
+          <View style={styles.shiftRow}>{VISIT_SHIFTS.map((item, index) => <TouchableOpacity key={item.name} accessibilityRole="radio" accessibilityState={{ checked: shift === index }} onPress={() => { setShift(index as 0 | 1); setTime(''); }} style={[styles.shift, shift === index && styles.outlined]}><Icon name={item.icon} size={22} color={colors.primary} /><Text style={styles.doctorName}>{item.label}</Text><Text style={styles.body}>{item.hours}</Text></TouchableOpacity>)}</View>
+          <Text style={styles.label}>Choose a visit time</Text>
+          <View style={styles.times}>{VISIT_SHIFTS[shift].times.map(slot => {
+            const disabled = !date || visitDateTime(date, slot) <= new Date();
+            return <TouchableOpacity key={slot} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: time === slot, disabled }} onPress={() => { setTime(slot); setVisitError(''); }} style={[styles.time, time === slot && styles.selected, disabled && styles.disabled]}><Text style={[styles.timeText, time === slot && styles.white]}>{slot}</Text></TouchableOpacity>;
+          })}</View>
+          {!!visitError && <Text accessibilityRole="alert" style={styles.error}>{visitError}</Text>}
+          <View style={styles.note}><Icon name="information-circle-outline" size={21} color={colors.primary} /><Text style={[styles.body, { flex: 1 }]}>Your visit time is an arrival guide. The clinic sees patients by queue number; waiting times can vary.</Text></View>
+        </>}
+        {step === 1 && <>
+          <Text style={styles.label}>Patient profile</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.memberRow}>
+            {familyMembers.map(member => <TouchableOpacity key={member.id} accessibilityRole="button" accessibilityState={{ selected: memberId === member.id }} onPress={() => selectMember(member)} style={[styles.member, memberId === member.id && styles.outlined]}><Text style={styles.timeText}>{member.name} · {member.relationship}</Text></TouchableOpacity>)}
+            <TouchableOpacity accessibilityRole="button" onPress={() => selectMember()} style={[styles.member, !memberId && styles.outlined]}><Text style={styles.timeText}>Someone else</Text></TouchableOpacity>
+          </ScrollView>
+          <InputField label="Patient full name" required value={name} onChangeText={text => { setName(text); setMemberId(undefined); }} placeholder="Enter full name" autoCapitalize="words" error={validation ? errors.name : undefined} />
+          <InputField label="Age in years" required value={age} onChangeText={setAge} placeholder="Enter age" keyboardType="number-pad" maxLength={3} error={validation ? errors.age : undefined} hint="For a baby under one year, enter 0." />
+          <Text style={styles.label}>Gender</Text>
+          <View style={styles.shiftRow}>{(['Male', 'Female', 'Other'] as const).map(value => <TouchableOpacity key={value} accessibilityRole="radio" accessibilityState={{ checked: gender === value }} onPress={() => setGender(value)} style={[styles.gender, gender === value && styles.outlined]}><Text style={styles.timeText}>{value}</Text></TouchableOpacity>)}</View>
+          <InputField label="Reason for your visit (optional)" value={symptoms} onChangeText={setSymptoms} placeholder="Let the doctor know how you’re feeling" multiline numberOfLines={4} style={{ minHeight: 100, textAlignVertical: 'top' }} />
+        </>}
+        {step === 2 && <>
+          <View style={styles.reviewCard}>
+            <View style={styles.reviewHeader}><Text style={styles.label}>Visit details</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit visit details" onPress={() => changeStep(0)} style={styles.edit}><Text style={styles.link}>Edit</Text></TouchableOpacity></View>
+            <ReviewRow icon="calendar-outline" title={date} subtitle={time + ' · ' + VISIT_SHIFTS[shift].label + ' shift'} />
+            <ReviewRow icon="location-outline" title={doctor.hospital} subtitle={doctor.roomNumber || 'Ask at clinic reception'} />
+            <Text style={styles.body}>{doctor.location}</Text>
           </View>
-        )}
-
-        {/* Step 2: Select Time */}
-        {currentStep === 2 && (
-          <View style={styles.stepSection}>
-            <Text style={styles.stepTitle}>Step 2: Select Time Slot</Text>
-            <Text style={styles.stepSubtitle}>Choose an open slot on {selectedDate}</Text>
-
-            <Text style={styles.slotGroupTitle}>Morning Slots</Text>
-            <View style={styles.slotGrid}>
-              {morningSlots.map((time) => (
-                <TimeSlotChip
-                  key={time}
-                  time={time}
-                  isAvailable={time !== '11:00 AM'}
-                  isSelected={selectedTime === time}
-                  onPress={() => setSelectedTime(time)}
-                />
-              ))}
-            </View>
-
-            <Text style={styles.slotGroupTitle}>Afternoon & Evening Slots</Text>
-            <View style={styles.slotGrid}>
-              {eveningSlots.map((time) => (
-                <TimeSlotChip
-                  key={time}
-                  time={time}
-                  isAvailable={time !== '03:00 PM'}
-                  isSelected={selectedTime === time}
-                  onPress={() => setSelectedTime(time)}
-                />
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Step 3: Physical OPD Shift & Token */}
-        {currentStep === 3 && (
-          <View style={styles.stepSection}>
-            <Text style={styles.stepTitle}>Step 3: Physical Clinic OPD Shift</Text>
-            <Text style={styles.stepSubtitle}>
-              Select your shift for in-person consultation at {doctor.hospital}
-            </Text>
-
-            {/* In-Clinic Physical Guarantee Banner */}
-            <View style={styles.physicalNoticeBox}>
-              <View style={styles.physicalNoticeIcon}>
-                <Icon name="business" size={22} color={colors.primary} />
-              </View>
-              <View style={styles.physicalNoticeTextCol}>
-                <Text style={styles.physicalNoticeTitle}>100% In-Clinic Physical Visit</Text>
-                <Text style={styles.physicalNoticeDesc}>
-                  All appointments are in-person at {doctor.hospital}, Room #204. Your digital OPD token gives you direct access without standing in line.
-                </Text>
-              </View>
-            </View>
-
-            {/* Shift 1: Morning OPD */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setSelectedShift('Morning OPD')}
-              style={[
-                styles.typeCard,
-                selectedShift === 'Morning OPD' && styles.typeCardActive,
-              ]}
-            >
-              <View
-                style={[
-                  styles.typeIconBox,
-                  selectedShift === 'Morning OPD' && styles.typeIconBoxActive,
-                ]}
-              >
-                <Icon
-                  name="sunny-outline"
-                  size={26}
-                  color={selectedShift === 'Morning OPD' ? colors.white : colors.primary}
-                />
-              </View>
-              <View style={styles.typeDetails}>
-                <View style={styles.shiftHeaderRow}>
-                  <Text style={styles.typeTitle}>Morning OPD Shift</Text>
-                  <View style={styles.tokenPill}>
-                    <Text style={styles.tokenPillText}>Next: #15</Text>
-                  </View>
-                </View>
-                <Text style={styles.typeDesc}>
-                  09:00 AM – 01:00 PM • Room #204 • Physical In-Clinic
-                </Text>
-              </View>
-              {selectedShift === 'Morning OPD' && (
-                <Icon name="checkmark-circle" size={24} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-
-            {/* Shift 2: Evening OPD */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setSelectedShift('Evening OPD')}
-              style={[
-                styles.typeCard,
-                selectedShift === 'Evening OPD' && styles.typeCardActive,
-              ]}
-            >
-              <View
-                style={[
-                  styles.typeIconBox,
-                  selectedShift === 'Evening OPD' && styles.typeIconBoxActive,
-                ]}
-              >
-                <Icon
-                  name="moon-outline"
-                  size={26}
-                  color={selectedShift === 'Evening OPD' ? colors.white : colors.primary}
-                />
-              </View>
-              <View style={styles.typeDetails}>
-                <View style={styles.shiftHeaderRow}>
-                  <Text style={styles.typeTitle}>Evening OPD Shift</Text>
-                  <View style={styles.tokenPill}>
-                    <Text style={styles.tokenPillText}>Next: #42</Text>
-                  </View>
-                </View>
-                <Text style={styles.typeDesc}>
-                  04:00 PM – 08:00 PM • Room #204 • Physical In-Clinic
-                </Text>
-              </View>
-              {selectedShift === 'Evening OPD' && (
-                <Icon name="checkmark-circle" size={24} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Step 4: Patient Details */}
-        {currentStep === 4 && (
-          <View style={styles.stepSection}>
-            <Text style={styles.stepTitle}>Step 4: Patient Details</Text>
-            <Text style={styles.stepSubtitle}>Provide medical details for doctor preparation</Text>
-
-            {/* Book For Family Member Selector */}
-            <View style={styles.familySelectBox}>
-              <View style={styles.familyHeaderRow}>
-                <Text style={styles.familyHeaderTitle}>Book Appointment For:</Text>
-                <TouchableOpacity onPress={handleQuickAddMember} style={styles.addMemberBtn}>
-                  <Text style={styles.addMemberBtnText}>+ Add Member</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.familyChipsRow}>
-                {familyMembers.map((member) => {
-                  const isChosen = selectedMember?.id === member.id;
-                  return (
-                    <TouchableOpacity
-                      key={member.id}
-                      style={[styles.memberChip, isChosen && styles.memberChipActive]}
-                      onPress={() => handleSelectMember(member)}
-                      activeOpacity={0.7}
-                    >
-                      <Icon
-                        name={member.relationship === 'Myself' ? 'person' : 'people'}
-                        size={14}
-                        color={isChosen ? colors.white : colors.primary}
-                      />
-                      <Text style={[styles.memberChipText, isChosen && styles.memberChipTextActive]}>
-                        {member.name} ({member.relationship})
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            <InputField
-              label="Patient Full Name"
-              placeholder="Enter name"
-              value={patientName}
-              onChangeText={setPatientName}
-              leftIcon="person-outline"
-            />
-
-
-            <InputField
-              label="Patient Age"
-              placeholder="e.g. 29"
-              value={patientAge}
-              onChangeText={setPatientAge}
-              keyboardType="number-pad"
-              leftIcon="calendar-outline"
-            />
-
-            <Text style={styles.fieldLabel}>Gender</Text>
-            <View style={styles.genderRow}>
-              {(['Male', 'Female', 'Other'] as const).map((g) => (
-                <TouchableOpacity
-                  key={g}
-                  activeOpacity={0.8}
-                  onPress={() => setGender(g)}
-                  style={[
-                    styles.genderPill,
-                    gender === g && styles.genderPillActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.genderText,
-                      gender === g && styles.genderTextActive,
-                    ]}
-                  >
-                    {g}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <InputField
-              label="Symptoms / Reason for Visit"
-              placeholder="Briefly describe what issues you are experiencing..."
-              value={symptoms}
-              onChangeText={setSymptoms}
-              multiline
-              numberOfLines={4}
-            />
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                setHasReportUploaded(!hasReportUploaded);
-                Alert.alert(
-                  hasReportUploaded ? 'Report Removed' : 'Report Attached',
-                  hasReportUploaded
-                    ? 'Lab report detached.'
-                    : 'CBC_Blood_Report.pdf attached successfully!'
-                );
-              }}
-              style={[
-                styles.uploadButton,
-                hasReportUploaded && styles.uploadButtonSuccess,
-              ]}
-            >
-              <Icon
-                name={hasReportUploaded ? 'checkmark-circle' : 'cloud-upload-outline'}
-                size={22}
-                color={hasReportUploaded ? colors.success : colors.primary}
-              />
-              <Text
-                style={[
-                  styles.uploadText,
-                  hasReportUploaded && styles.uploadTextSuccess,
-                ]}
-              >
-                {hasReportUploaded
-                  ? 'CBC_Blood_Report.pdf (Attached)'
-                  : 'Upload Medical Reports (Optional)'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Sticky Bottom Continue Button */}
-      <View style={styles.bottomBar}>
-        <Button
-          title={currentStep === 4 ? 'Proceed to Payment' : `Continue to Step ${currentStep + 1}`}
-          onPress={handleContinue}
-          size="lg"
-          iconName="arrow-forward"
-          iconPosition="right"
-        />
-      </View>
+          <View style={styles.reviewCard}><View style={styles.reviewHeader}><Text style={styles.label}>Patient details</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit patient details" onPress={() => changeStep(1)} style={styles.edit}><Text style={styles.link}>Edit</Text></TouchableOpacity></View><ReviewRow icon="person-outline" title={name.trim()} subtitle={age + ' years · ' + gender} />{!!symptoms.trim() && <Text style={styles.body}>{symptoms.trim()}</Text>}</View>
+          <View style={styles.reviewCard}><Text style={styles.label}>Fee breakdown</Text><View style={styles.feeRow}><Text style={styles.body}>Consultation</Text><Text style={styles.doctorName}>Rs. {doctor.fees.toLocaleString()}</Text></View><View style={styles.feeRow}><Text style={styles.body}>Service fee</Text><Text style={styles.doctorName}>Rs. {SERVICE_FEE}</Text></View><View style={[styles.feeRow, styles.totalRow]}><Text style={styles.doctorName}>Total</Text><Text style={styles.total}>Rs. {(doctor.fees + SERVICE_FEE).toLocaleString()}</Text></View></View>
+          <View style={styles.note}><Icon name="ticket-outline" size={21} color={colors.primary} /><Text style={[styles.body, { flex: 1 }]}>Your queue number will appear on the confirmation screen. You can then track your turn from My appointments.</Text></View>
+        </>}
+      </FormScrollView>
+      <View style={styles.footer}><View style={styles.footerRow}><Text style={styles.body}>Total, including service fee</Text><Text style={styles.doctorName}>Rs. {(doctor.fees + SERVICE_FEE).toLocaleString()}</Text></View><Button title={['Continue to patient details', 'Review my visit', 'Continue to payment'][step]} onPress={continueBooking} disabled={step === 0 && (!date || !time)} iconName="arrow-forward" iconPosition="right" /></View>
     </SafeAreaView>
   );
-};
-
+}
+function ReviewRow({ icon, title, subtitle }: { icon: string; title: string; subtitle: string }) { return <View style={styles.reviewRow}><Icon name={icon} size={22} color={colors.primary} /><View style={{ flex: 1 }}><Text style={styles.doctorName}>{title}</Text><Text style={styles.body}>{subtitle}</Text></View></View>; }
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  summaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    marginHorizontal: spacing.lg,
-    padding: spacing.md,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  doctorThumb: {
-    width: 54,
-    height: 54,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primaryLight,
-  },
-  summaryInfo: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  summaryDoctorName: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
-  },
-  summaryDoctorSpecialty: {
-    ...typography.caption,
-    color: colors.primary,
-    marginTop: 1,
-  },
-  summaryMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  summaryMetaText: {
-    ...typography.tiny,
-    color: colors.textSecondary,
-  },
-  dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: colors.textMuted,
-    marginHorizontal: 2,
-  },
-  feeBadge: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 6,
-    borderRadius: borderRadius.md,
-  },
-  feeAmount: {
-    ...typography.captionBold,
-    color: colors.primaryDark,
-  },
-  stepIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xxl,
-  },
-  stepCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepCircleActive: {
-    backgroundColor: colors.primary,
-  },
-  stepCircleCurrent: {
-    borderWidth: 2,
-    borderColor: colors.primaryDark,
-  },
-  stepNumber: {
-    ...typography.captionBold,
-    color: colors.textSecondary,
-  },
-  stepNumberActive: {
-    color: colors.white,
-  },
-  stepLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: 4,
-  },
-  stepLineActive: {
-    backgroundColor: colors.primary,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 100,
-  },
-  stepSection: {
-    marginTop: spacing.xs,
-  },
-  stepTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-  },
-  stepSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: 2,
-    marginBottom: spacing.lg,
-  },
-  datesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  dateSelectCard: {
-    width: '30%',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  dateSelectCardActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  dateDayText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  dateDayTextActive: {
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  dateNumText: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    marginTop: 4,
-  },
-  dateNumTextActive: {
-    color: colors.white,
-  },
-  slotGroupTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  slotGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  typeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  typeCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
-  typeIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeIconBoxActive: {
-    backgroundColor: colors.primary,
-  },
-  typeDetails: {
-    flex: 1,
-    marginLeft: spacing.md,
-    marginRight: spacing.sm,
-  },
-  typeTitle: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
-  },
-  typeDesc: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  fieldLabel: {
-    ...typography.captionBold,
-    color: colors.textPrimary,
-    marginBottom: spacing.xs + 2,
-  },
-  genderRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  genderPill: {
-    flex: 1,
-    backgroundColor: colors.card,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  genderPillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  genderText: {
-    ...typography.captionBold,
-    color: colors.textSecondary,
-  },
-  genderTextActive: {
-    color: colors.white,
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.card,
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  uploadButtonSuccess: {
-    borderColor: colors.success,
-    backgroundColor: colors.successLight,
-  },
-  uploadText: {
-    ...typography.bodyMedium,
-    color: colors.primary,
-  },
-  uploadTextSuccess: {
-    color: colors.success,
-    fontWeight: '700',
-  },
-  physicalNoticeBox: {
-    flexDirection: 'row',
-    backgroundColor: '#EFF6FF',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  physicalNoticeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#DBEAFE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  physicalNoticeTextCol: {
-    flex: 1,
-  },
-  physicalNoticeTitle: {
-    ...typography.bodyBold,
-    color: colors.primary,
-    fontSize: 14,
-  },
-  physicalNoticeDesc: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  shiftHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  tokenPill: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: borderRadius.full,
-  },
-  tokenPillText: {
-    ...typography.captionBold,
-    color: colors.white,
-    fontSize: 11,
-  },
-  familySelectBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: spacing.md,
-  },
-  familyHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  familyHeaderTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
-  addMemberBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  addMemberBtnText: {
-    fontFamily: fonts.semibold,
-    fontSize: 12,
-    color: colors.primary,
-  },
-  familyChipsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 4,
-  },
-  memberChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  memberChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  memberChipText: {
-    fontFamily: fonts.medium,
-    fontSize: 12,
-    color: colors.textPrimary,
-  },
-  memberChipTextActive: {
-    fontFamily: fonts.bold,
-    color: colors.white,
-  },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
+  screen: { flex: 1, backgroundColor: colors.background }, content: { padding: 22, paddingBottom: 26, width: '100%', maxWidth: 720, alignSelf: 'center' },
+  progress: { flexDirection: 'row', gap: 10, paddingHorizontal: 22, paddingBottom: 12 }, progressItem: { flex: 1 }, progressLine: { height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 8 }, progressActive: { backgroundColor: colors.primary }, progressLabel: { ...typography.captionBold, color: colors.textSecondary },
+  doctorCard: { flexDirection: 'row', gap: 13, alignItems: 'center', padding: 16, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, marginBottom: 24 }, photo: { width: 54, height: 60, borderRadius: 12, backgroundColor: colors.primaryLight }, doctorName: { ...typography.bodySemibold, color: colors.textPrimary }, body: { ...typography.caption, color: colors.textSecondary, marginTop: 3 },
+  title: { ...typography.h1, color: colors.textPrimary }, description: { ...typography.body, color: colors.textSecondary, marginTop: 8, marginBottom: 24 }, label: { ...typography.bodySemibold, color: colors.textPrimary, marginBottom: 12 },
+  dateRow: { gap: 9, paddingBottom: 22 }, date: { width: 67, paddingVertical: 13, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: 'center' }, dateDay: { ...typography.captionMedium, color: colors.textSecondary }, dateNumber: { ...typography.h2, color: colors.textPrimary, marginVertical: 4 }, selected: { backgroundColor: colors.primary, borderColor: colors.primary }, white: { color: colors.white }, disabled: { opacity: 0.35 },
+  shiftRow: { flexDirection: 'row', gap: 10, marginBottom: 22 }, shift: { flex: 1, gap: 4, padding: 15, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.white }, outlined: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  times: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, time: { flexBasis: '29%', flexGrow: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.white }, timeText: { ...typography.captionBold, color: colors.textPrimary },
+  note: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 16, borderRadius: 16, backgroundColor: colors.primaryLight, marginTop: 22 }, error: { ...typography.caption, color: colors.error, marginTop: 12 },
+  memberRow: { gap: 10, paddingBottom: 20 }, member: { paddingHorizontal: 15, minHeight: 46, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white }, gender: { flex: 1, minHeight: 46, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white },
+  reviewCard: { padding: 18, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, marginBottom: 14 }, reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, reviewRow: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 14 }, edit: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }, link: { ...typography.captionBold, color: colors.primary }, feeRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 10 }, totalRow: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14, marginTop: 4 }, total: { ...typography.h3, color: colors.primary },
+  footer: { padding: 18, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white }, footerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
 });
-
-
-export default BookAppointmentScreen;

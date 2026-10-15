@@ -16,6 +16,22 @@ export interface Category {
   color?: string;
 }
 
+export interface Hospital {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+  rating: number;
+  reviewsCount?: number;
+  phone?: string;
+  image?: string;
+  emergencyAvailable?: boolean;
+  opdAvailable?: boolean;
+  departments?: string[];
+  timings?: string;
+  doctorCount?: number;
+}
+
 export interface Doctor {
   id: string;
   name: string;
@@ -28,6 +44,8 @@ export interface Doctor {
   experience: number; // in years
   fees: number;
   hospital: string;
+  hospitalId?: string;
+  city?: string;
   location: string;
   distance: string;
   bio: string;

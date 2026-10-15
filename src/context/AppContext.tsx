@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import {
   Appointment,
-  CheckInStatus,
   Doctor,
   DoctorAvailabilityConfig,
   DoctorDelayType,
@@ -44,6 +43,7 @@ import {
   updateDoctorVerification,
 } from '../services/authService';
 import { doctors as fallbackDoctors } from '../data';
+import { belongsToDoctor, buildDoctorQueue, isVisitToday, nextQueuePatient, queueFingerprint } from '../utils/doctorWorkflow';
 
 interface AppContextType {
   // Data
@@ -93,6 +93,8 @@ interface AppContextType {
   checkInPatient: (appointmentId: string) => void;
 
   // Actions - Queue Control Center
+  reviewAppointmentRequest: (appointmentId: string, accepted: boolean) => void;
+  setDoctorQueueShift: (shift: QueueStatus['shift']) => void;
   callNextPatient: () => void;
   skipPatient: () => void;
   markNoShow: () => void;
@@ -138,6 +140,8 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const syncedQueue = useRef('');
+  const shiftQueues = useRef(new Map<string, QueueStatus>());
   // Current user state (starts with local persisted user or null)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
@@ -157,7 +161,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     hospital: 'MediCare Central Clinic',
     room: 'Room #204',
     shift: 'Morning OPD',
-    currentServing: 1,
+    currentServing: 0,
     totalTokensToday: 0,
     userToken: 0,
     estimatedWaitMinutes: 0,
@@ -262,11 +266,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (role === 'doctor') {
         const docName = name || 'Doctor';
-        setQueueStatus((prev) => ({
-          ...prev,
-          doctorId: uid || prev.doctorId,
-          doctorName: docName,
-        }));
+        setQueueStatus((prev) => buildDoctorQueue(userApts, { uid: uid || '', name: docName, role, hospital: currentUser?.hospital }, prev));
       } else {
         const activeApt = userApts.find(
           (a) =>
@@ -339,13 +339,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!activeQueueDoctorId) return;
     const unsub = subscribeToQueueStatus(activeQueueDoctorId, (cloudData) => {
       if (cloudData && typeof cloudData === 'object') {
-        setQueueStatus((prev) => ({
-          ...prev,
-          ...cloudData,
-          delayStatus: cloudData.delayStatus
-            ? { ...prev.delayStatus, ...cloudData.delayStatus }
-            : prev.delayStatus,
-        }));
+        setQueueStatus((prev) => {
+          const next = { ...prev, ...cloudData, delayStatus: cloudData.delayStatus ? { ...prev.delayStatus, ...cloudData.delayStatus } : prev.delayStatus };
+          syncedQueue.current = queueFingerprint(next);
+          return next;
+        });
       }
     });
 
@@ -356,21 +354,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 4. Synchronize Queue state to Cloud when doctor updates status
   useEffect(() => {
-    if (currentUser?.role === 'doctor' && currentUser.uid) {
-      syncQueueStatusToCloud(currentUser.uid, queueStatus);
+    if (currentUser?.role === 'doctor' && currentUser.uid && queueStatus.doctorId === currentUser.uid) {
+      const fingerprint = queueFingerprint(queueStatus);
+      if (fingerprint !== syncedQueue.current) {
+        syncedQueue.current = fingerprint;
+        syncQueueStatusToCloud(currentUser.uid, queueStatus);
+      }
     }
   }, [
     currentUser?.role,
     currentUser?.uid,
-    queueStatus.currentServing,
-    queueStatus.isPaused,
-    queueStatus.delayStatus.status,
-    queueStatus.delayStatus.delayMinutes,
-    queueStatus.skippedTokens,
+    queueStatus,
   ]);
 
   // Synchronize queue from live appointments for today
   useEffect(() => {
+    if (currentUser?.role === 'doctor') {
+      setQueueStatus(previous => buildDoctorQueue(appointments, currentUser, previous));
+      return;
+    }
     if (appointments.length > 0) {
       const activeApts = appointments.filter((a) => {
         if (a.status === 'Cancelled' || a.status === 'cancelled') return false;
@@ -611,7 +613,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     addNotification(
       'Appointment Rescheduled',
-      `Your appointment has been shifted to ${newDate} at ${newTime}. Your token has been re-indexed.`,
+      `Your appointment has been moved to ${newDate} at ${newTime}. Your queue number is unchanged.`,
       'appointment'
     );
   };
@@ -643,194 +645,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  // 5. Doctor Calls Next Patient
+  // Doctor appointment requests and queue actions use the selected visit.
+  const setDoctorQueueShift = (shift: QueueStatus['shift']) => {
+    if (currentUser?.role !== 'doctor' || shift === queueStatus.shift) return;
+    if (appointments.some(item => belongsToDoctor(item, currentUser) && isVisitToday(item.date) && ['Your Turn', 'In Consultation'].includes(item.status))) return;
+    const key = currentUser.uid + ':' + new Date().toDateString() + ':';
+    shiftQueues.current.set(key + queueStatus.shift, queueStatus);
+    const saved = shiftQueues.current.get(key + shift);
+    const room = appointments.find(item => belongsToDoctor(item, currentUser) && isVisitToday(item.date) && item.shift === shift)?.opdRoom;
+    setQueueStatus(buildDoctorQueue(appointments, currentUser, saved || { ...queueStatus, shift, room: room || 'Clinic room', currentServing: 0, queue: [], skippedTokens: [] }));
+  };
+
+  const reviewAppointmentRequest = (appointmentId: string, accepted: boolean) => {
+    const appointment = appointments.find(item => item.id === appointmentId);
+    if (!appointment || !belongsToDoctor(appointment, currentUser) || !isCurrentDoctorVerified || appointment.status.toLowerCase() !== 'pending') return;
+    const tokenNumber = appointment.tokenNumber || Math.max(0, ...appointments.filter(item => belongsToDoctor(item, currentUser) && item.date === appointment.date && item.shift === appointment.shift).map(item => item.tokenNumber || 0)) + 1;
+    const status = accepted ? 'Confirmed' as const : 'Cancelled' as const;
+    const changes = accepted ? { tokenNumber } : { cancellationReason: 'Declined by clinic', refundStatus: 'Not Applicable' as const };
+    setAppointments(previous => previous.map(item => item.id === appointmentId ? { ...item, ...changes, status } : item));
+    persistAppointmentStatus(appointmentId, status, changes);
+  };
+
+  // 5. Call the next checked-in patient without completing a consultation.
   const callNextPatient = () => {
-    if (queueStatus.isPaused) {
-      Alert.alert('Queue is Paused', 'Please resume the queue before calling the next patient.');
-      return;
-    }
-
-    const nextServing = queueStatus.currentServing + 1;
-    const targetUserToken = queueStatus.userToken;
-    const remaining = targetUserToken - nextServing;
-
-    const updatedQueue = queueStatus.queue.map((item) => {
-      if (item.tokenNumber === queueStatus.currentServing) {
-        return { ...item, status: 'completed' as const };
-      }
-      if (item.tokenNumber === nextServing) {
-        return { ...item, status: 'serving' as const };
-      }
-      if (item.tokenNumber === nextServing + 1) {
-        return { ...item, status: 'next' as const };
-      }
-      return item;
-    });
-
-    const newWait = calculateWaitMinutes(
-      nextServing,
-      targetUserToken,
-      queueStatus.delayStatus.delayMinutes
-    );
-
-    setQueueStatus((prev) => ({
-      ...prev,
-      currentServing: nextServing,
-      estimatedWaitMinutes: newWait,
-      queue: updatedQueue,
-    }));
-
-    setAppointments((prev) =>
-      prev.map((apt) => {
-        if (apt.tokenNumber === queueStatus.currentServing) {
-          return { ...apt, status: 'Completed' };
-        }
-        if (apt.tokenNumber === nextServing) {
-          return {
-            ...apt,
-            status: 'Your Turn',
-            currentServingNumber: nextServing,
-            estimatedWaitMinutes: 0,
-          };
-        }
-        if (apt.tokenNumber && apt.tokenNumber > nextServing) {
-          return {
-            ...apt,
-            currentServingNumber: nextServing,
-            estimatedWaitMinutes: calculateWaitMinutes(
-              nextServing,
-              apt.tokenNumber,
-              queueStatus.delayStatus.delayMinutes
-            ),
-          };
-        }
-        return apt;
-      })
-    );
-
-    if (remaining === 0) {
-      addNotification(
-        '🔔 IT IS YOUR TURN NOW!',
-        `Token #${targetUserToken}: Please proceed immediately to Clinic Room #204.`,
-        'queue'
-      );
-    } else if (remaining === 1) {
-      addNotification(
-        '⚡ Your Turn Is Next!',
-        `Now serving #${nextServing}. You are next in line. Please be right outside Room #204.`,
-        'queue'
-      );
-    } else if (remaining === 2) {
-      addNotification(
-        '⏱ 2 Patients Remaining',
-        `Now serving #${nextServing}. Only 2 patients ahead of you (~10-12 mins remaining).`,
-        'queue'
-      );
-    } else {
-      addNotification('OPD Queue Updated', `Now calling Token #${nextServing} to Room #204.`, 'queue');
-    }
+    if (currentUser?.role !== 'doctor' || !isCurrentDoctorVerified || queueStatus.isPaused || queueStatus.doctorId !== currentUser.uid) return;
+    if (queueStatus.queue.some(item => item.status === 'serving' || item.status === 'in_consultation')) return;
+    const next = nextQueuePatient(queueStatus.queue);
+    const appointment = appointments.find(item => item.id === next?.appointmentId);
+    if (!next || !appointment || !belongsToDoctor(appointment, currentUser) || !isVisitToday(appointment.date) || appointment.shift !== queueStatus.shift || !['confirmed', 'waiting', 'in queue', 'rescheduled', 'upcoming'].includes(appointment.status.toLowerCase())) return;
+    const updated: QueueStatus = {
+      ...queueStatus, doctorId: currentUser.uid, currentServing: next.tokenNumber,
+      queue: queueStatus.queue.map(item => item.appointmentId === next.appointmentId ? { ...item, status: 'serving' } : item),
+    };
+    setQueueStatus(updated);
+    setAppointments(previous => previous.map(item => item.id === appointment.id ? { ...item, status: 'Your Turn', currentServingNumber: next.tokenNumber, estimatedWaitMinutes: 0 } : item));
+    persistAppointmentStatus(appointment.id, 'Your Turn', { currentServingNumber: next.tokenNumber, estimatedWaitMinutes: 0 });
   };
 
-  // 6. Skip Patient
+  // 6. Skip a called patient. The next call remains an explicit action.
   const skipPatient = () => {
-    const skippedToken = queueStatus.currentServing;
-    const nextServing = skippedToken + 1;
-
-    setQueueStatus((prev) => ({
-      ...prev,
-      currentServing: nextServing,
-      skippedTokens: [...prev.skippedTokens, skippedToken],
-      queue: prev.queue.map((item) =>
-        item.tokenNumber === skippedToken
-          ? { ...item, status: 'skipped' as const }
-          : item.tokenNumber === nextServing
-          ? { ...item, status: 'serving' as const }
-          : item
-      ),
-    }));
-
-    addNotification(
-      'Patient Skipped',
-      `Token #${skippedToken} did not respond and was placed on the skipped roster. Now serving #${nextServing}.`,
-      'queue'
-    );
+    if (currentUser?.role !== 'doctor' || !isCurrentDoctorVerified || queueStatus.doctorId !== currentUser.uid) return;
+    const current = queueStatus.queue.find(item => item.tokenNumber === queueStatus.currentServing && item.status === 'serving');
+    if (!current?.appointmentId) return;
+    setQueueStatus(previous => ({ ...previous, currentServing: 0, skippedTokens: [...new Set([...previous.skippedTokens, current.tokenNumber])], queue: previous.queue.map(item => item.appointmentId === current.appointmentId ? { ...item, status: 'skipped' } : item) }));
+    setAppointments(previous => previous.map(item => item.id === current.appointmentId ? { ...item, status: 'Waiting' } : item));
+    persistAppointmentStatus(current.appointmentId, 'Waiting');
   };
 
-  // 7. Mark Absent / No-Show
+  // 7. Mark an absent called patient, never another doctor's matching token.
   const markNoShow = () => {
-    const targetToken = queueStatus.currentServing;
-    const nextServing = targetToken + 1;
-
-    setQueueStatus((prev) => ({
-      ...prev,
-      currentServing: nextServing,
-      queue: prev.queue.map((item) =>
-        item.tokenNumber === targetToken
-          ? { ...item, status: 'no_show' as const }
-          : item.tokenNumber === nextServing
-          ? { ...item, status: 'serving' as const }
-          : item
-      ),
-    }));
-
-    setAppointments((prev) =>
-      prev.map((apt) =>
-        apt.tokenNumber === targetToken
-          ? { ...apt, status: 'No Show', checkInStatus: 'Not Checked In' }
-          : apt
-      )
-    );
-
-    addNotification(
-      'Marked as No-Show',
-      `Token #${targetToken} was marked absent (No-Show). Queue advanced to #${nextServing}.`,
-      'queue'
-    );
+    if (currentUser?.role !== 'doctor' || !isCurrentDoctorVerified || queueStatus.doctorId !== currentUser.uid) return;
+    const current = queueStatus.queue.find(item => item.tokenNumber === queueStatus.currentServing && item.status === 'serving');
+    if (!current?.appointmentId) return;
+    setQueueStatus(previous => ({ ...previous, currentServing: 0, queue: previous.queue.map(item => item.appointmentId === current.appointmentId ? { ...item, status: 'no_show' } : item) }));
+    setAppointments(previous => previous.map(item => item.id === current.appointmentId ? { ...item, status: 'No Show', checkInStatus: 'Not Checked In' } : item));
+    persistAppointmentStatus(current.appointmentId, 'No Show', { checkInStatus: 'Not Checked In' });
   };
 
-  // 8. Recall Skipped Patient
+  // 8. Restore a skipped patient to the waiting list.
   const recallSkippedPatient = (tokenNumber: number) => {
-    setQueueStatus((prev) => ({
-      ...prev,
-      skippedTokens: prev.skippedTokens.filter((t) => t !== tokenNumber),
-      queue: prev.queue.map((item) =>
-        item.tokenNumber === tokenNumber
-          ? { ...item, status: 'waiting' as const, isRecalled: true }
-          : item
-      ),
-    }));
-
-    addNotification(
-      'Skipped Token Recalled',
-      `Token #${tokenNumber} has been recalled and restored to the active queue.`,
-      'queue'
-    );
+    if (currentUser?.role !== 'doctor' || !isCurrentDoctorVerified || queueStatus.doctorId !== currentUser.uid) return;
+    const current = queueStatus.queue.find(item => item.tokenNumber === tokenNumber && item.status === 'skipped');
+    if (!current) return;
+    setQueueStatus(previous => ({ ...previous, skippedTokens: previous.skippedTokens.filter(token => token !== tokenNumber), queue: previous.queue.map(item => item.appointmentId === current.appointmentId ? { ...item, status: 'waiting', isRecalled: true } : item) }));
   };
 
   // 9. Pause Queue
   const pauseQueue = () => {
-    setQueueStatus((prev) => ({ ...prev, isPaused: true }));
+    if (currentUser?.role !== 'doctor' || !isCurrentDoctorVerified || queueStatus.doctorId !== currentUser.uid) return;
+    setQueueStatus((prev) => ({ ...prev, doctorId: currentUser.uid, isPaused: true }));
     addNotification(
       'OPD Queue Paused',
-      'The doctor has temporarily paused token calling for an emergency round.',
+      'The clinic has temporarily paused calling patients. Check your queue for updates.',
       'queue'
     );
   };
 
   // 10. Resume Queue
   const resumeQueue = () => {
+    if (currentUser?.role !== 'doctor' || !isCurrentDoctorVerified || queueStatus.doctorId !== currentUser.uid) return;
     setQueueStatus((prev) => ({ ...prev, isPaused: false }));
     addNotification('OPD Queue Resumed', 'The doctor has resumed live OPD consultations.', 'queue');
   };
 
   // 11. Doctor Delay Management
   const setDoctorDelay = (delayType: DoctorDelayType, minutes: number, customMessage?: string) => {
+    if (currentUser?.role !== 'doctor' || !isCurrentDoctorVerified || queueStatus.doctorId !== currentUser.uid) return;
     let msg = customMessage;
     if (!msg) {
       if (delayType === 'on_time') {
         msg = 'Doctor is back on schedule.';
       } else if (delayType === 'emergency_delay') {
-        msg = 'Emergency procedure in progress. Consultation delayed ~45 mins.';
+        msg = `The clinic has reported an emergency delay of approximately ${minutes} minutes.`;
       } else {
         msg = `Doctor is currently running approximately ${minutes} minutes late.`;
       }
@@ -854,13 +760,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 12. Start Consultation
   const startConsultation = (appointmentId: string) => {
+    const appointment = appointments.find(item => item.id === appointmentId);
+    if (!appointment || !belongsToDoctor(appointment, currentUser) || !isCurrentDoctorVerified || appointment.status !== 'Your Turn') return;
     setAppointments((prev) =>
       prev.map((apt) => (apt.id === appointmentId ? { ...apt, status: 'In Consultation' } : apt))
     );
+    persistAppointmentStatus(appointmentId, 'In Consultation');
+    const updatedQueue: QueueStatus = { ...queueStatus, queue: queueStatus.queue.map(item => item.appointmentId === appointmentId ? { ...item, status: 'in_consultation' } : item) };
+    setQueueStatus(updatedQueue);
   };
 
   // 13. Save Digital Prescription
   const savePrescription = (data: Omit<Prescription, 'id' | 'createdAt'>): Prescription => {
+    const appointment = appointments.find(item => item.id === data.appointmentId);
+    if (!appointment || !belongsToDoctor(appointment, currentUser) || !isCurrentDoctorVerified || appointment.status !== 'In Consultation') {
+      throw new Error('Start the selected patient’s consultation before saving a prescription.');
+    }
     const newPrescription: Prescription = {
       ...data,
       id: `rx-${Date.now()}`,
@@ -887,6 +802,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       persistAppointmentStatus(data.appointmentId, 'Completed', {
         prescriptionId: newPrescription.id,
       });
+      setQueueStatus(previous => ({
+        ...previous,
+        currentServing: previous.queue.find(item => item.appointmentId === data.appointmentId)?.tokenNumber === previous.currentServing ? 0 : previous.currentServing,
+        queue: previous.queue.map(item => item.appointmentId === data.appointmentId ? { ...item, status: 'completed' } : item),
+      }));
     }
 
     addNotification(
@@ -1089,6 +1009,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     rescheduleAppointment,
     cancelAppointment,
     checkInPatient,
+    reviewAppointmentRequest,
+    setDoctorQueueShift,
     callNextPatient,
     skipPatient,
     markNoShow,

@@ -7,3 +7,4 @@ export * from './reviews';
 export * from './prescriptions';
 export * from './notifications';
 export * from './queue';
+export * from './hospitals';

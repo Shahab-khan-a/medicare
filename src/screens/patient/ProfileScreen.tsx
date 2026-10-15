@@ -120,7 +120,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Hero Header */}
-      <LinearGradient colors={['#0A1428', '#0F172A']} style={styles.heroHeader}>
+      <LinearGradient colors={[colors.primaryDark, colors.primary]} style={styles.heroHeader}>
         <View style={styles.heroContent}>
           <View style={styles.titleRow}>
             <TouchableOpacity

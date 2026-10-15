@@ -7,18 +7,18 @@
  */
 export const colors = {
   // Brand
-  primary: '#136BC6',
-  primaryDark: '#0F589F',
-  primaryLight: '#EAF3FD',
-  primaryMuted: '#D4E6FB',
+  primary: '#267259',
+  primaryDark: '#174D43',
+  primaryLight: '#E7F3ED',
+  primaryMuted: '#CEE7DA',
   primaryBright: '#2A9DF4', // decorative only (icons, gradients) — not for text on white
   accent: '#0FA58B',
   accentText: '#0B7D6B',
   accentLight: '#E3F7F2',
 
   // Surfaces
-  background: '#F4F7FB',
-  backgroundSecondary: '#EDF1F7',
+  background: '#F7F8F4',
+  backgroundSecondary: '#EDF3EF',
   card: '#FFFFFF',
   surfaceMuted: '#F7F9FC',
 
@@ -56,8 +56,8 @@ export const colors = {
   skeletonHighlight: '#F3F6FA',
 
   // Gradients
-  gradientStart: '#136BC6',
-  gradientEnd: '#0FA58B',
+  gradientStart: '#174D43',
+  gradientEnd: '#267259',
 
   // Legacy tokens still referenced by screens awaiting the light redesign
   medicalNavy: '#0F172A',

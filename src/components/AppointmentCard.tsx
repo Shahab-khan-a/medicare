@@ -246,7 +246,8 @@ const getActions = (
   isDoctorView: boolean,
   h: ActionHandlers,
 ): CardAction[] => {
-  const norm = (appointment.status || '').toLowerCase();
+  const status = (appointment.status || '').toLowerCase();
+  const norm = status === 'rescheduled' ? 'confirmed' : status;
 
   if (isDoctorView) {
     if (norm === 'pending') {

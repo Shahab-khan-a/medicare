@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 interface FormScrollViewProps extends ScrollViewProps {
+  ref?: React.Ref<ScrollView>;
   /** Height of anything fixed above the form (e.g. a custom header) on iOS. */
   keyboardOffset?: number;
   containerStyle?: StyleProp<ViewStyle>;
@@ -25,6 +26,7 @@ export const FormScrollView: React.FC<FormScrollViewProps> = ({
   keyboardOffset = 0,
   containerStyle,
   contentContainerStyle,
+  ref,
   ...rest
 }) => (
   <KeyboardAvoidingView
@@ -33,6 +35,7 @@ export const FormScrollView: React.FC<FormScrollViewProps> = ({
     keyboardVerticalOffset={keyboardOffset}
   >
     <ScrollView
+      ref={ref}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       showsVerticalScrollIndicator={false}

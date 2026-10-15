@@ -4,20 +4,23 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   StatusBar,
   Alert,
   Modal,
   TextInput,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius, fonts, hitSlop } from '../../theme';
-import { LinearGradient } from '../../components/LinearGradient';
+import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Header } from '../../components/Header';
 import Icon from '../../components/Icon';
 import Button from '../../components/Button';
 import AppointmentCard from '../../components/AppointmentCard';
 import QRCodeModal from '../../components/QRCodeModal';
 import { useApp } from '../../context/AppContext';
 import { Appointment } from '../../types';
+import { bookingDates, VISIT_SHIFTS, visitDateTime } from '../../utils/booking';
 
 interface MyAppointmentsScreenProps {
   navigation: any;
@@ -26,7 +29,7 @@ interface MyAppointmentsScreenProps {
 type TabType = 'upcoming' | 'completed' | 'cancelled';
 
 const TAB_CONFIG = [
-  { key: 'upcoming', label: 'Active OPD', icon: 'calendar-outline', color: '#38BDF8' },
+  { key: 'upcoming', label: 'Upcoming', icon: 'calendar-outline', color: '#38BDF8' },
   { key: 'completed', label: 'Completed', icon: 'checkmark-done-circle-outline', color: '#4ADE80' },
   { key: 'cancelled', label: 'Cancelled', icon: 'close-circle-outline', color: '#F87171' },
 ] as const;
@@ -35,12 +38,17 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
   const {
     appointments,
     cancelAppointment,
-    checkInPatient,
     submitReview,
     rescheduleAppointment,
+    doctors,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabType>('upcoming');
+  const [reschedulingApt, setReschedulingApt] = useState<Appointment | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const rescheduleDoctor = doctors.find(doctor => doctor.id === reschedulingApt?.doctorId);
+  const rescheduleDates = rescheduleDoctor ? bookingDates(rescheduleDoctor) : [];
 
   // Cancellation Modal State
   const [cancellingApt, setCancellingApt] = useState<Appointment | null>(null);
@@ -77,7 +85,7 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
         s === 'your turn' ||
         s === 'yourturn' ||
         s === 'in consultation' ||
-        s === 'pending'
+        s === 'pending' || s === 'rescheduled'
       );
     }
     if (activeTab === 'completed') {
@@ -96,7 +104,7 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
     setCancellingApt(null);
     Alert.alert(
       'Appointment Cancelled',
-      `Your token has been cancelled. Full refund of Rs. ${cancellingApt.fees} is being processed to your original payment method.`
+      `Your token has been cancelled. Contact the clinic directly if you need help with a payment made at reception.`
     );
   };
 
@@ -115,89 +123,16 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
   };
 
   const handleReschedule = (apt: Appointment) => {
-    Alert.alert(
-      'Reschedule Appointment',
-      `Move appointment with ${apt.doctorName} to tomorrow at 11:30 AM?`,
-      [
-        { text: 'Keep Current', style: 'cancel' },
-        {
-          text: 'Confirm Reschedule',
-          onPress: () => {
-            rescheduleAppointment(apt.id, 'Tomorrow', '11:30 AM');
-            Alert.alert('Rescheduled', 'Your OPD slot and token have been updated.');
-          },
-        },
-      ]
-    );
+    setReschedulingApt(apt);
+    setRescheduleDate('');
+    setRescheduleTime('');
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" />
 
-      {/* Hero Header */}
-      <LinearGradient colors={['#0A1428', '#0F172A']} style={styles.heroHeader}>
-        <View style={styles.heroContent}>
-          <View style={styles.headerRow}>
-            <View style={styles.headerLeft}>
-              <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={() => navigation.goBack()}
-                hitSlop={hitSlop}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-                style={styles.backBtn}
-              >
-                <Icon name="chevron-back" size={20} color={colors.white} />
-              </TouchableOpacity>
-              <View>
-                <Text style={styles.heroLabel}>My OPD Slips & Tokens</Text>
-                <Text style={styles.heroTitle}>Appointments</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('DoctorList')}
-              style={styles.newBookingBtn}
-            >
-              <Icon name="add" size={16} color="#38BDF8" />
-              <Text style={styles.newBookingText}>Book Slot</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Quick Metrics Strip */}
-          <View style={styles.summaryStrip}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryNumber}>
-                {
-                  appointments.filter(
-                    (a) =>
-                      a.status !== 'Completed' &&
-                      a.status !== 'completed' &&
-                      a.status !== 'Cancelled' &&
-                      a.status !== 'cancelled'
-                  ).length
-                }
-              </Text>
-              <Text style={styles.summaryLabel}>Active Queue</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryNumber, { color: '#4ADE80' }]}>
-                {appointments.filter((a) => a.status === 'Completed' || a.status === 'completed').length}
-              </Text>
-              <Text style={styles.summaryLabel}>Completed</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryNumber, { color: '#F87171' }]}>
-                {appointments.filter((a) => a.status === 'Cancelled' || a.status === 'No Show').length}
-              </Text>
-              <Text style={styles.summaryLabel}>Cancelled</Text>
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
+      <Header title="My appointments" showBack={false} rightIcon="add" rightAccessibilityLabel="Book a new visit" onRightPress={() => navigation.navigate('DoctorList')} />
 
       {/* Tabs Row */}
       <View style={styles.tabContainer}>
@@ -235,18 +170,18 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
             onPress={() => {
               if (item.status === 'Completed' || item.status === 'completed') {
                 if (item.prescriptionId) {
-                  navigation.navigate('Prescription');
+                  navigation.navigate('Prescription', { prescriptionId: item.prescriptionId });
                 }
               } else {
-                navigation.navigate('LiveQueueTracker');
+                navigation.navigate('LiveQueueTracker', { appointment: item });
               }
             }}
-            onJoinCall={() => navigation.navigate('LiveQueueTracker')}
-            onCheckIn={() => checkInPatient(item.id)}
+            onJoinCall={() => navigation.navigate('LiveQueueTracker', { appointment: item })}
+            onCheckIn={() => navigation.navigate('LiveQueueTracker', { appointment: item })}
             onShowQR={() => setQrModalApt(item)}
             onCancel={() => setCancellingApt(item)}
             onReschedule={() => handleReschedule(item)}
-            onViewPrescription={() => navigation.navigate('Prescription')}
+            onViewPrescription={() => navigation.navigate('Prescription', { prescriptionId: item.prescriptionId })}
             onRate={() => {
               setRatingApt(item);
             }}
@@ -255,15 +190,15 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Icon name="calendar-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No {activeTab} OPD appointments</Text>
+            <Text style={styles.emptyTitle}>No {activeTab} appointments</Text>
             <Text style={styles.emptySubtitle}>
               {activeTab === 'upcoming'
-                ? 'You do not have any tokens active today. Book a doctor to get an OPD queue number.'
+                ? 'Your upcoming visits will appear here. Find a doctor to book your first visit.'
                 : `No ${activeTab} visits recorded in your profile.`}
             </Text>
             {activeTab === 'upcoming' && (
               <Button
-                title="Book Doctor OPD Slot"
+                title="Find a doctor"
                 onPress={() => navigation.navigate('DoctorList')}
                 size="md"
                 style={{ marginTop: 16 }}
@@ -272,6 +207,33 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
           </View>
         }
       />
+
+      <Modal visible={!!reschedulingApt} transparent animationType="slide" onRequestClose={() => setReschedulingApt(null)}>
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.modalSheet, { maxHeight: '90%' }]} edges={['bottom']}>
+            <View style={styles.modalHeader}><Text style={styles.modalTitle}>Move your visit</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close rescheduling" onPress={() => setReschedulingApt(null)} style={{ padding: 12 }}><Icon name="close" size={22} color={colors.textSecondary} /></TouchableOpacity></View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalSub}>{reschedulingApt?.doctorName} · {reschedulingApt?.shift}</Text>
+              <Text style={[styles.reasonLabel, { marginTop: 18 }]}>Choose a new date</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {rescheduleDates.filter(date => date.available).map(date => <TouchableOpacity key={date.full} accessibilityRole="button" accessibilityState={{ selected: rescheduleDate === date.full }} onPress={() => { setRescheduleDate(date.full); setRescheduleTime(''); }} style={[styles.reasonOption, { minWidth: '28%', flexGrow: 1, justifyContent: 'center' }, rescheduleDate === date.full && styles.reasonOptionActive]}><Text style={styles.reasonText}>{date.day} {date.number} {date.month}</Text></TouchableOpacity>)}
+              </View>
+              <Text style={[styles.reasonLabel, { marginTop: 18 }]}>Choose a new arrival time</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {VISIT_SHIFTS[reschedulingApt?.shift === 'Evening OPD' ? 1 : 0].times.map(time => {
+                  const disabled = !rescheduleDate || !(visitDateTime(rescheduleDate, time) > new Date());
+                  return <TouchableOpacity key={time} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected: rescheduleTime === time, disabled }} onPress={() => setRescheduleTime(time)} style={[styles.reasonOption, { minWidth: '28%', flexGrow: 1, justifyContent: 'center', opacity: disabled ? 0.35 : 1 }, rescheduleTime === time && styles.reasonOptionActive]}><Text style={styles.reasonText}>{time}</Text></TouchableOpacity>;
+                })}
+              </View>
+            </ScrollView>
+            <Button title="Save new visit time" disabled={!rescheduleDate || !rescheduleTime} style={{ marginTop: 18 }} onPress={() => {
+              if (!reschedulingApt || !(visitDateTime(rescheduleDate, rescheduleTime) > new Date())) return;
+              rescheduleAppointment(reschedulingApt.id, rescheduleDate, rescheduleTime);
+              setReschedulingApt(null);
+            }} />
+          </SafeAreaView>
+        </View>
+      </Modal>
 
       {/* Cancellation & Refund Reason Modal (Req #20) */}
       <Modal
@@ -297,9 +259,9 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
             <View style={styles.refundInfoBox}>
               <Icon name="cash-outline" size={20} color={colors.successText} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.refundTitle}>100% Refund Guarantee</Text>
+                <Text style={styles.refundTitle}>Before you cancel</Text>
                 <Text style={styles.refundDesc}>
-                  Cancelling will release your token slot. Rs. {cancellingApt?.fees} will be automatically credited to your JazzCash / Card within 48h.
+                  Cancelling releases your queue number. If you paid the clinic separately, contact reception about its refund policy.
                 </Text>
               </View>
             </View>
@@ -437,7 +399,7 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
           onClose={() => setQrModalApt(null)}
           onTrackQueue={() => {
             setQrModalApt(null);
-            navigation.navigate('LiveQueueTracker');
+            navigation.navigate('LiveQueueTracker', { appointment: qrModalApt });
           }}
           appointmentData={{
             doctorName: qrModalApt.doctorName,
@@ -452,7 +414,7 @@ export const MyAppointmentsScreen: React.FC<MyAppointmentsScreenProps> = ({ navi
           }}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
