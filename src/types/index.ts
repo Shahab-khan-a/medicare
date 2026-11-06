@@ -30,6 +30,8 @@ export interface Hospital {
   departments?: string[];
   timings?: string;
   doctorCount?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Doctor {

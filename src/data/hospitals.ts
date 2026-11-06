@@ -13,6 +13,23 @@ export const CITIES = [
 
 export type CityName = (typeof CITIES)[number];
 
+export interface CityLocation {
+  latitude: number;
+  longitude: number;
+  zoom: number;
+}
+
+export const CITY_COORDINATES: Record<string, CityLocation> = {
+  'All Cities': { latitude: 30.3753, longitude: 69.3451, zoom: 6 },
+  Lahore: { latitude: 31.4880, longitude: 74.3200, zoom: 12 },
+  Karachi: { latitude: 24.8700, longitude: 67.0500, zoom: 12 },
+  Islamabad: { latitude: 33.6850, longitude: 73.0500, zoom: 12 },
+  Rawalpindi: { latitude: 33.6000, longitude: 73.0600, zoom: 12 },
+  Peshawar: { latitude: 34.0000, longitude: 71.5000, zoom: 12 },
+  Faisalabad: { latitude: 31.4200, longitude: 73.0900, zoom: 12 },
+  Multan: { latitude: 30.1900, longitude: 71.4600, zoom: 12 },
+};
+
 export const hospitals: Hospital[] = [
   {
     id: 'hosp-1',
@@ -26,6 +43,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['Cardiology', 'Neurology', 'Pediatrics', 'Oncology', 'Orthopedics'],
+    latitude: 24.8927,
+    longitude: 67.0747,
   },
   {
     id: 'hosp-2',
@@ -39,6 +58,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['Oncology', 'General Medicine', 'Radiology', 'Pathology'],
+    latitude: 31.4707,
+    longitude: 74.2709,
   },
   {
     id: 'hosp-3',
@@ -52,6 +73,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['Cardiology', 'Nephrology', 'General Surgery', 'Dermatology', 'Neurology'],
+    latitude: 33.6823,
+    longitude: 73.0809,
   },
   {
     id: 'hosp-4',
@@ -65,6 +88,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['General Physician', 'Orthopedics', 'Gynecology', 'Urology'],
+    latitude: 31.4795,
+    longitude: 74.3789,
   },
   {
     id: 'hosp-5',
@@ -78,6 +103,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['Cardiology', 'Dermatology', 'Plastic Surgery', 'Pediatrics'],
+    latitude: 24.8296,
+    longitude: 67.0345,
   },
   {
     id: 'hosp-6',
@@ -91,6 +118,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['Cardiology', 'Neurology', 'Dentistry', 'Orthopedics'],
+    latitude: 31.4886,
+    longitude: 74.2882,
   },
   {
     id: 'hosp-7',
@@ -104,6 +133,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['General Medicine', 'Ophthalmology', 'Pediatrics', 'Dentistry'],
+    latitude: 24.8943,
+    longitude: 67.0694,
   },
   {
     id: 'hosp-8',
@@ -117,6 +148,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['General Physician', 'Dermatology', 'Cardiology', 'ENT'],
+    latitude: 33.6934,
+    longitude: 73.0076,
   },
   {
     id: 'hosp-9',
@@ -130,6 +163,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['Cardiology', 'Vascular Surgery', 'Cardiac Rehab'],
+    latitude: 31.5112,
+    longitude: 74.3499,
   },
   {
     id: 'hosp-10',
@@ -143,6 +178,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['General Medicine', 'Pediatrics', 'Orthopedics'],
+    latitude: 33.6331,
+    longitude: 73.0673,
   },
   {
     id: 'hosp-11',
@@ -156,6 +193,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['Cardiology', 'General Surgery', 'Neurology', 'Pediatrics'],
+    latitude: 33.9875,
+    longitude: 71.4396,
   },
   {
     id: 'hosp-12',
@@ -169,6 +208,8 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['General Medicine', 'Cardiology', 'Orthopedics'],
+    latitude: 31.4088,
+    longitude: 73.0934,
   },
   {
     id: 'hosp-13',
@@ -182,5 +223,7 @@ export const hospitals: Hospital[] = [
     emergencyAvailable: true,
     opdAvailable: true,
     departments: ['General Physician', 'Pediatrics', 'Dermatology'],
+    latitude: 30.2084,
+    longitude: 71.4428,
   },
 ];

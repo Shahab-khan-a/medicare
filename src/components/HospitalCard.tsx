@@ -23,6 +23,7 @@ interface HospitalCardProps {
   onViewDoctors?: () => void;
   onDoctorPress?: (doctor: Doctor) => void;
   onBookDoctor?: (doctor: Doctor) => void;
+  onViewOnMap?: () => void;
   style?: StyleProp<ViewStyle>;
   initiallyExpanded?: boolean;
 }
@@ -33,6 +34,7 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({
   onViewDoctors,
   onDoctorPress,
   onBookDoctor,
+  onViewOnMap,
   style,
   initiallyExpanded = false,
 }) => {
@@ -58,7 +60,13 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({
   };
 
   const handleDirections = () => {
-    openHospitalLocationInMaps(hospital.name, hospital.address, hospital.city);
+    openHospitalLocationInMaps(
+      hospital.name,
+      hospital.address,
+      hospital.city,
+      hospital.latitude,
+      hospital.longitude
+    );
   };
 
   return (
@@ -255,8 +263,20 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({
 
         <View style={styles.divider} />
 
-        {/* Action Buttons: Directions, Call, View Doctors */}
+        {/* Action Buttons: Map, Directions, Call, View Doctors */}
         <View style={styles.actionsRow}>
+          {/* View on Map pill */}
+          {onViewOnMap && (
+            <PressableScale
+              onPress={onViewOnMap}
+              style={styles.mapBtn}
+              accessibilityLabel={`View ${hospital.name} on map`}
+            >
+              <Icon name="map-outline" size={14} color={colors.primary} />
+              <Text style={styles.mapBtnText}>Map</Text>
+            </PressableScale>
+          )}
+
           <PressableScale
             onPress={handleDirections}
             style={styles.directionsBtn}
@@ -283,7 +303,7 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({
             accessibilityLabel={`View hospital details and specialists at ${hospital.name}`}
           >
             <Icon name="business-outline" size={14} color={colors.white} />
-            <Text style={styles.viewDoctorsText}>Hospital Details</Text>
+            <Text style={styles.viewDoctorsText}>Details</Text>
           </PressableScale>
         </View>
       </View>
@@ -617,6 +637,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs + 2,
+    flexWrap: 'wrap',
+  },
+  mapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  mapBtnText: {
+    ...typography.captionBold,
+    fontSize: 12,
+    color: colors.primary,
   },
   directionsBtn: {
     flexDirection: 'row',

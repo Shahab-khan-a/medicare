@@ -10,7 +10,7 @@ export const routePaths: Record<string, string> = {
   DoctorTabs: '/doctor', DoctorDashboard: '/doctor', DoctorAppointments: '/doctor/appointments',
   DoctorEarningsTab: '/doctor/earnings', DoctorProfileTab: '/doctor/profile',
   DoctorDetail: '/DoctorDetail', BookAppointment: '/BookAppointment', Payment: '/Payment',
-  AppointmentSuccess: '/AppointmentSuccess', HospitalDetail: '/HospitalDetail',
+  AppointmentSuccess: '/AppointmentSuccess', HospitalDetail: '/HospitalDetail', HospitalMap: '/HospitalMap',
   Chat: '/Chat', WaitingRoom: '/WaitingRoom', VideoCall: '/VideoCall',
   Prescription: '/Prescription', Notifications: '/Notifications',
   DoctorAvailability: '/DoctorAvailability', DoctorVideoCall: '/DoctorVideoCall',

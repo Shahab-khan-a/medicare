@@ -9,5 +9,6 @@ export default function PatientLayout() {
     <Tabs.Screen name="appointments" options={{ title: 'Bookings', tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'calendar' : 'calendar-outline'} focused={focused} /> }} />
     <Tabs.Screen name="queue" options={{ title: 'My turn', tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'ticket' : 'ticket-outline'} focused={focused} /> }} />
     <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} /> }} />
+    <Tabs.Screen name="map" options={{ href: null }} />
   </Tabs>;
 }

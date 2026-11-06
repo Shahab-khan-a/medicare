@@ -18,3 +18,4 @@ export * from './LiveTokenCard';
 export * from './AppointmentStatusBadge';
 export * from './QRCodeModal';
 export * from './HospitalCard';
+export * from './HospitalLocationMap';

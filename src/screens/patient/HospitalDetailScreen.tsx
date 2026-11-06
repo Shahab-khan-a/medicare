@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { Icon, DoctorCard, EmptyState, Header } from '../../components';
+import { Icon, DoctorCard, EmptyState, Header, HospitalLocationMap } from '../../components';
 import { Hospital, Doctor } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { hospitals as defaultHospitals } from '../../data';
@@ -102,7 +102,13 @@ export const HospitalDetailScreen: React.FC<HospitalDetailScreenProps> = ({
   };
 
   const handleDirections = () => {
-    openHospitalLocationInMaps(hospital.name, hospital.address, hospital.city);
+    openHospitalLocationInMaps(
+      hospital.name,
+      hospital.address,
+      hospital.city,
+      hospital.latitude,
+      hospital.longitude
+    );
   };
 
   const handleShare = () => {
@@ -203,6 +209,20 @@ export const HospitalDetailScreen: React.FC<HospitalDetailScreenProps> = ({
             </View>
           </View>
 
+          {/* Interactive Hospital Map Preview */}
+          <View style={styles.detailMapContainer}>
+            <HospitalLocationMap
+              hospitals={[hospital]}
+              initialHospitalId={hospital.id}
+              singleHospitalMode={true}
+              showControls={true}
+              showCityFilters={false}
+              showSearchBar={false}
+              showBottomCard={false}
+              height={175}
+            />
+          </View>
+
           {/* Quick Location Action Buttons */}
           <View style={styles.locationActionsRow}>
             <TouchableOpacity
@@ -212,6 +232,20 @@ export const HospitalDetailScreen: React.FC<HospitalDetailScreenProps> = ({
             >
               <Icon name="navigate-outline" size={15} color={colors.white} />
               <Text style={styles.getDirectionsText}>Open in Google Maps</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.mapTabButton}
+              onPress={() =>
+                navigation.navigate('DoctorList', {
+                  initialTab: 'map',
+                  city: hospital.city,
+                })
+              }
+            >
+              <Icon name="map-outline" size={15} color={colors.primary} />
+              <Text style={styles.mapTabButtonText}>Hospital Map</Text>
             </TouchableOpacity>
 
             {hospital.phone && (
@@ -510,6 +544,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 20,
   },
+  detailMapContainer: {
+    height: 175,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    marginTop: spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   locationActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -532,6 +574,23 @@ const styles = StyleSheet.create({
     ...typography.captionBold,
     fontSize: 12,
     color: colors.white,
+  },
+  mapTabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    minHeight: 40,
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.25)',
+  },
+  mapTabButtonText: {
+    ...typography.captionBold,
+    fontSize: 12,
+    color: colors.primary,
   },
   callHospitalButton: {
     flexDirection: 'row',

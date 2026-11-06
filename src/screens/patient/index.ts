@@ -14,3 +14,4 @@ export * from './NotificationsScreen';
 export * from './ProfileScreen';
 export { default as LiveQueueTrackerScreen } from './LiveQueueTrackerScreen';
 export * from './HospitalDetailScreen';
+export * from './HospitalMapScreen';
